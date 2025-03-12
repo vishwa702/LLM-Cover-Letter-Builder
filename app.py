@@ -1,5 +1,8 @@
 import streamlit as st
 from langchain_deepseek import ChatDeepSeek
+from langchain.memory import ConversationBufferMemory
+from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
 import os
 import docx
 import fitz  # PyMuPDF for PDFs
@@ -26,14 +29,15 @@ else:
 DATA_FOLDER = "data"
 os.makedirs(DATA_FOLDER, exist_ok=True)
 
-st.title("RAG Chatbot with Document Upload!")
+st.title("AI-Powered Cover Letter Builder")
 
 
 
 
 
 # --- File Upload Section ---
-st.subheader("Upload a document (TXT, PDF, DOCX)")
+st.subheader("Upload your resume(s)")
+st.write("Upload a document (TXT, PDF, DOCX)")
 uploaded_file = st.file_uploader("Choose a file", type=["txt", "pdf", "docx"])
 
 text = ""
@@ -67,7 +71,7 @@ if uploaded_file is not None:
 
 
 # --- Load Existing Files ---
-st.subheader("Previously Uploaded Files")
+st.write("Load a saved file")
 existing_files = [f for f in os.listdir(DATA_FOLDER) if f.endswith(("txt", "pdf", "docx"))]
 
 selected_file = st.selectbox("Select a file to load:", ["None"] + existing_files)
@@ -90,15 +94,20 @@ if selected_file != "None":
     st.info(f"Loaded text from `{selected_file}`")
 
 
+print('App ready')
 
 
+# --- Build the cover letter ---
+st.subheader("Build your cover letter")
 
-# --- Ask Question Based on File ---
-st.subheader("Ask a Question Based on the Document")
-user_input = st.text_input("Enter your question:")
+job_description = st.text_area("Enter the job description:")
+
+user_input = st.text_input("Enter your prompt:", value="Write a cover letter for the given position. Write up to three paragraphs, while using  simple, personable and heartfelt language. ")
+
+user_input = job_description + "\n" + user_input
 
 # Add a button to submit the query
-if st.button("Ask Question") and user_input and text:
+if st.button("Generate") and user_input and text:
     # Initialize LLM
     llm = ChatDeepSeek(
         model="deepseek-chat",
