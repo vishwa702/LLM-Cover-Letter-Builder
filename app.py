@@ -1,7 +1,5 @@
 import streamlit as st
 from langchain_deepseek import ChatDeepSeek
-from langchain.memory import ConversationBufferMemory
-from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 import os
 import docx
