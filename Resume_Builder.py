@@ -23,59 +23,24 @@ if 'key' not in st.session_state:
     st.session_state['key'] = 'value'
 
 
-
-
 # Ensure data folder exists
 DATA_FOLDER = "data"
 os.makedirs(DATA_FOLDER, exist_ok=True)
 
+
+# ------- Begin Page -------
+
+
 st.title("AI-Powered Cover Letter Builder")
 
 
-
-
-
-# --- File Upload Section ---
-st.subheader("Upload your resume(s)")
-st.write("Upload a document (TXT, PDF, DOCX)")
-uploaded_file = st.file_uploader("Choose a file", type=["txt", "pdf", "docx"])
-
-text = ""
-
-if uploaded_file is not None:
-    file_path = os.path.join(DATA_FOLDER, uploaded_file.name)
-
-    # Save uploaded file permanently
-    with open(file_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-
-    st.success(f"File saved: `{file_path}`")
-
-    # Extract text from the file
-    file_type = uploaded_file.name.split(".")[-1]
-
-    if file_type == "txt":
-        with open(file_path, "r", encoding="utf-8") as f:
-            text = f.read()
-    elif file_type == "pdf":
-        pdf_document = fitz.open(file_path)
-        text = "\n".join([page.get_text() for page in pdf_document])
-    elif file_type == "docx":
-        doc = docx.Document(file_path)
-        text = "\n".join([para.text for para in doc.paragraphs])
-
-    st.text_area("Extracted Document Text", text, height=200)
-
-
-
-
-
 # --- Load Existing Files ---
-st.write("Load a saved file")
+st.subheader("Load a Saved Resume")
 existing_files = [f for f in os.listdir(DATA_FOLDER) if f.endswith(("txt", "pdf", "docx"))]
 
 selected_file = st.selectbox("Select a file to load:", ["None"] + existing_files)
 
+text = ""
 if selected_file != "None":
     file_path = os.path.join(DATA_FOLDER, selected_file)
     file_type = selected_file.split(".")[-1]
@@ -93,6 +58,9 @@ if selected_file != "None":
     st.text_area("Loaded Document Text", text, height=200)
     st.info(f"Loaded text from `{selected_file}`")
 
+# st.write("Need to upload or delete files? Go to **File Management**.")
+if st.button('Manage Files'):
+    st.switch_page('pages/File_Management.py')
 
 if 'cover_letter' not in st.session_state:
     st.session_state['cover_letter'] = ''
