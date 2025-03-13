@@ -70,9 +70,6 @@ if 'cover_letter' not in st.session_state:
 llm = ChatDeepSeek(model="deepseek-chat", temperature=0.7)
 
 
-print('App ready')
-
-
 
 # Create a placeholder for the cover letter text area
 cover_letter_placeholder = st.empty()
