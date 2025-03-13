@@ -31,7 +31,7 @@ os.makedirs(DATA_FOLDER, exist_ok=True)
 # ------- Begin Page -------
 
 
-st.title("AI-Powered Cover Letter Builder")
+st.title("Cover Letter Builder with AI 🤖📝")
 
 
 # --- Load Existing Files ---
@@ -77,11 +77,11 @@ cover_letter_placeholder = st.empty()
 if not st.session_state.cover_letter:
     # --- Build the Cover Letter ---
     st.subheader("Build Your Cover Letter")
-    job_description = st.text_area("Enter the job description:")
+    job_description = st.text_area("Enter the job description:", height=120, placeholder='This position is for the role of...')
 
     default_prompt = ("Write a cover letter for the given position. Write up to three paragraphs, "
                       "using simple, personable, and heartfelt language.")
-    user_input = st.text_input("Enter your prompt:", value=default_prompt)
+    user_input = st.text_area("Enter your prompt:", value=default_prompt, height=80)
 
     full_prompt = job_description + "\n" + user_input
 
