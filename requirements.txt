@@ -2,6 +2,7 @@
 
 openai 
 chromadb
+sqlite3>=3.35.0
 sentence-transformers 
 langchain 
 langchain-community
