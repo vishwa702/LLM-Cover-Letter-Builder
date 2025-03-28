@@ -4,11 +4,11 @@ from langchain.prompts import PromptTemplate
 import os
 import docx
 import fitz  # PyMuPDF for PDFs
+import chromadb
+from langchain_community.embeddings import HuggingFaceEmbeddings
 
 from dotenv import load_dotenv
 load_dotenv()
-
-
 
 # Get API key from environment
 api_key = os.getenv("DEEPSEEK_API_KEY")
@@ -18,80 +18,95 @@ if not api_key:
 else:
     os.environ["DEEPSEEK_API_KEY"] = api_key  # Optional: Explicitly set for LangChain
 
-
-if 'key' not in st.session_state:
-    st.session_state['key'] = 'value'
-
-
-# Ensure data folder exists
-DATA_FOLDER = "data"
-os.makedirs(DATA_FOLDER, exist_ok=True)
-
-
-# ------- Begin Page -------
-
-
-st.title("Cover Letter Builder with AI 🤖📝")
-
-
-# --- Load Existing Files ---
-st.subheader("Load a Saved Resume")
-existing_files = [f for f in os.listdir(DATA_FOLDER) if f.endswith(("txt", "pdf", "docx"))]
-
-selected_file = st.selectbox("Select a file to load:", ["None"] + existing_files)
-
-text = ""
-if selected_file != "None":
-    file_path = os.path.join(DATA_FOLDER, selected_file)
-    file_type = selected_file.split(".")[-1]
-
-    if file_type == "txt":
-        with open(file_path, "r", encoding="utf-8") as f:
-            text = f.read()
-    elif file_type == "pdf":
-        pdf_document = fitz.open(file_path)
-        text = "\n".join([page.get_text() for page in pdf_document])
-    elif file_type == "docx":
-        doc = docx.Document(file_path)
-        text = "\n".join([para.text for para in doc.paragraphs])
-
-    st.text_area("Loaded Document Text", text, height=200)
-    st.info(f"Loaded text from `{selected_file}`")
-
-# st.write("Need to upload or delete files? Go to **File Management**.")
-if st.button('Manage Files'):
-    st.switch_page('pages/File_Management.py')
-
+# Initialize session state
 if 'cover_letter' not in st.session_state:
     st.session_state['cover_letter'] = ''
+if 'resume_content' not in st.session_state:
+    st.session_state['resume_content'] = ''
 
+# Initialize ChromaDB
+@st.cache_resource
+def get_chroma_db():
+    """Initialize and return a persistent ChromaDB instance."""
+    chroma_client = chromadb.PersistentClient(path="vector_db")
+    return chroma_client
+
+chroma_client = get_chroma_db()
+collection = chroma_client.get_or_create_collection(name="documents")
 
 # Initialize LLM
 llm = ChatDeepSeek(model="deepseek-chat", temperature=0.7)
 
+# ------- Begin Page -------
+st.title("Cover Letter Builder with AI 🤖📝")
 
 
-# Create a placeholder for the cover letter text area
-cover_letter_placeholder = st.empty()
 
 if not st.session_state.cover_letter:
     # --- Build the Cover Letter ---
     st.subheader("Build Your Cover Letter")
     job_description = st.text_area("Enter the job description:", height=120, placeholder='This position is for the role of...')
 
-    default_prompt = ("Write a cover letter for the given position. Write up to three paragraphs, "
-                      "using simple, personable, and heartfelt language.")
-    user_input = st.text_area("Enter your prompt:", value=default_prompt, height=80)
+    if job_description.strip():
+        # Extract keywords from job description
+        keyword_prompt = "Extract the most relevant keywords from this job description that would help match a resume to it. Return just a comma-separated list of keywords."
+        keyword_response = llm.invoke([("human", f"{keyword_prompt}\n\nJob Description:\n{job_description}")])
+        keywords = [kw.strip() for kw in keyword_response.content.split(',')]
+        
+        # Display extracted keywords
+        st.write("Extracted Keywords:", ", ".join(keywords))
+        
+        # Use keywords to search vector database
+        search_query = " ".join(keywords)
+        results = collection.query(
+            query_texts=[search_query],
+            n_results=3
+        )
+        
+        if results and results['documents'] and results['documents'][0]:
+            # Show relevant resume content
+            with st.expander("View Relevant Resume Content"):
+                for i, (doc, metadata) in enumerate(zip(results["documents"][0], results["metadatas"][0])):
+                    st.write(f"**Relevant Section {i+1}:**")
+                    st.text_area(f"Content {i+1}", doc, height=150, key=f"resume_section_{i}")
+                    st.write(f"Source: {metadata.get('filename', 'Unknown')}")
+                    st.write("---")
+            
+            # Combine relevant resume content for the cover letter
+            resume_content = "\n\n".join(results['documents'][0])
+            st.session_state['resume_content'] = resume_content
+        else:
+            st.warning("No matching resume content found. Please upload your resume in the File Management page.")
+            resume_content = ""
+            st.session_state['resume_content'] = ""
 
-    full_prompt = job_description + "\n" + user_input
+        default_prompt = ("Write a cover letter for the given position. Write up to three paragraphs, "
+                         "using simple, personable, and heartfelt language. Use the provided resume content "
+                         "to highlight relevant experience and skills.")
+        user_input = st.text_area("Enter your prompt:", value=default_prompt, height=80)
 
-    if st.button("Generate") and full_prompt.strip():
-        prompt = f"Generate a professional cover letter based on the following details:\n\n{full_prompt}"
-        response = llm.invoke([("human", prompt)])
+        if st.button("Generate") and user_input.strip():
+            # Combine all context for the cover letter
+            full_prompt = f"""Job Description:
+{job_description}
 
-        # Update session state cover letter
-        st.session_state.cover_letter = response.content
-        st.success("Cover Letter Generated!")
+Relevant Resume Content:
+{resume_content}
+
+Instructions:
+{user_input}
+
+Generate a professional cover letter that highlights the candidate's relevant experience and skills from the resume while addressing the job requirements."""
+            
+            response = llm.invoke([("human", full_prompt)])
+
+            # Update session state cover letter
+            st.session_state.cover_letter = response.content
+            st.success("Cover Letter Generated!")
+
+
+# Create a placeholder for the cover letter text area
+cover_letter_placeholder = st.empty()
 
 # Display the generated cover letter
 if st.session_state.cover_letter:
@@ -103,10 +118,13 @@ if st.session_state.cover_letter:
 
     if st.button("Edit Cover Letter") and edit_prompt.strip():
         edit_template = PromptTemplate(
-            input_variables=["existing_letter", "edit_instruction"],
+            input_variables=["existing_letter", "edit_instruction", "job_description", "resume_content"],
             template=(
                 "You are refining a cover letter. Here is the current version:\n\n{existing_letter}\n\n"
-                "User's instruction: {edit_instruction}\n\nGenerate the improved version."
+                "Job Description:\n{job_description}\n\n"
+                "Relevant Resume Content:\n{resume_content}\n\n"
+                "User's instruction: {edit_instruction}\n\n"
+                "Generate the improved version."
             )
         )
         # Combine the prompt template with the LLM using the runnable sequence operator
@@ -114,7 +132,9 @@ if st.session_state.cover_letter:
 
         new_cover_letter = edit_chain.invoke({
             "existing_letter": st.session_state.cover_letter,
-            "edit_instruction": edit_prompt
+            "edit_instruction": edit_prompt,
+            "job_description": job_description,
+            "resume_content": st.session_state['resume_content']
         })
 
         # Update session state with the new version
@@ -124,3 +144,7 @@ if st.session_state.cover_letter:
         cover_letter_placeholder.text_area("Cover Letter", value=st.session_state.cover_letter, height=300, key="cover_letter_area")
 
         st.success("Cover Letter Updated!")
+
+# Add a button to manage files
+if st.button('Manage Files'):
+    st.switch_page('pages/File_Management.py')

@@ -5,6 +5,7 @@ import docx
 import chromadb
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 
 # Ensure data folder exists
@@ -14,6 +15,14 @@ os.makedirs(DATA_FOLDER, exist_ok=True)
 # Set page configuration
 st.set_page_config(page_title="📂 File Management", page_icon="📂")
 st.title("📂 File Management")
+
+# Initialize text splitter
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1000,
+    chunk_overlap=200,
+    length_function=len,
+    separators=["\n\n", "\n", " ", ""]
+)
 
 # --- Caching the ChromaDB connection ---
 @st.cache_resource
@@ -57,12 +66,19 @@ if uploaded_file is not None:
     # Extract text and add to vector DB
     file_text = extract_text(file_path, uploaded_file.name.split(".")[-1])
     if file_text:
+        # Split text into chunks
+        chunks = text_splitter.split_text(file_text)
+        
+        # Create unique IDs for each chunk
+        chunk_ids = [f"{uploaded_file.name}_chunk_{i}" for i in range(len(chunks))]
+        
+        # Add chunks to ChromaDB
         collection.add(
-            ids=[uploaded_file.name],
-            documents=[file_text],
-            metadatas=[{"filename": uploaded_file.name}]
+            ids=chunk_ids,
+            documents=chunks,
+            metadatas=[{"filename": uploaded_file.name, "chunk_index": i} for i in range(len(chunks))]
         )
-        st.success(f"✅ File `{uploaded_file.name}` added to ChromaDB!")
+        st.success(f"✅ File `{uploaded_file.name}` split into {len(chunks)} chunks and added to ChromaDB!")
     else:
         st.warning("⚠️ Could not extract text from this file.")
 
@@ -82,9 +98,21 @@ if existing_files:
 
     # Delete file
     if st.button("🗑 Delete File"):
+        # Delete the physical file
         os.remove(os.path.join(DATA_FOLDER, selected_file))
-        collection.delete(ids=[selected_file])  # Remove from ChromaDB
-        st.success(f"🗑 Deleted `{selected_file}`")
+        
+        # Get all chunks associated with this file
+        results = collection.get(
+            where={"filename": selected_file}
+        )
+        
+        if results and results['ids']:
+            # Delete all chunks from ChromaDB
+            collection.delete(ids=results['ids'])
+            st.success(f"🗑 Deleted `{selected_file}` and its {len(results['ids'])} chunks")
+        else:
+            st.warning(f"⚠️ No chunks found for `{selected_file}` in the database")
+            
         st.rerun()
 else:
     st.info("🚫 No files uploaded yet.")
