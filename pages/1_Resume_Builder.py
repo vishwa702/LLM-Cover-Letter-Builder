@@ -23,6 +23,8 @@ if 'cover_letter' not in st.session_state:
     st.session_state['cover_letter'] = ''
 if 'resume_content' not in st.session_state:
     st.session_state['resume_content'] = ''
+if 'job_description' not in st.session_state:
+    st.session_state['job_description'] = ''
 
 # Initialize ChromaDB
 @st.cache_resource
@@ -40,12 +42,14 @@ llm = ChatDeepSeek(model="deepseek-chat", temperature=0.7)
 # ------- Begin Page -------
 st.title("Cover Letter Builder with AI 🤖📝")
 
-
+# Create a placeholder for the cover letter text area
+cover_letter_placeholder = st.empty()
 
 if not st.session_state.cover_letter:
     # --- Build the Cover Letter ---
     st.subheader("Build Your Cover Letter")
     job_description = st.text_area("Enter the job description:", height=120, placeholder='This position is for the role of...')
+    st.session_state['job_description'] = job_description
 
     if job_description.strip():
         # Extract keywords from job description
@@ -104,13 +108,9 @@ Generate a professional cover letter that highlights the candidate's relevant ex
             st.session_state.cover_letter = response.content
             st.success("Cover Letter Generated!")
 
-
-# Create a placeholder for the cover letter text area
-cover_letter_placeholder = st.empty()
-
 # Display the generated cover letter
 if st.session_state.cover_letter:
-    cover_letter_placeholder.text_area("Cover Letter", value=st.session_state.cover_letter, height=300, key="cover_letter_area")
+    cover_letter_placeholder.text_area("Cover Letter", value=st.session_state.cover_letter, height=300)
 
     # --- Refine the Cover Letter ---
     st.subheader("Refine Your Cover Letter")
@@ -124,24 +124,24 @@ if st.session_state.cover_letter:
                 "Job Description:\n{job_description}\n\n"
                 "Relevant Resume Content:\n{resume_content}\n\n"
                 "User's instruction: {edit_instruction}\n\n"
-                "Generate the improved version."
+                "Generate the improved version. Return the entire letter, not just a section. Return only the letter, no other text."
             )
         )
         # Combine the prompt template with the LLM using the runnable sequence operator
         edit_chain = edit_template | llm
 
-        new_cover_letter = edit_chain.invoke({
+        response = edit_chain.invoke({
             "existing_letter": st.session_state.cover_letter,
             "edit_instruction": edit_prompt,
-            "job_description": job_description,
+            "job_description": st.session_state['job_description'],
             "resume_content": st.session_state['resume_content']
         })
 
         # Update session state with the new version
-        st.session_state.cover_letter = new_cover_letter
+        st.session_state.cover_letter = response.content
 
         # Update the same placeholder with the updated cover letter
-        cover_letter_placeholder.text_area("Cover Letter", value=st.session_state.cover_letter, height=300, key="cover_letter_area")
+        cover_letter_placeholder.text_area("Cover Letter", value=st.session_state.cover_letter, height=300)
 
         st.success("Cover Letter Updated!")
 
