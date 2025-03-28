@@ -150,4 +150,4 @@ if st.session_state.cover_letter:
 
 # Add a button to manage files
 if st.button('Manage Files'):
-    st.switch_page('pages/File_Management.py')
+    st.switch_page('pages/2_File_Management.py')
