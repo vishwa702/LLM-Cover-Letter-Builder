@@ -58,7 +58,8 @@ if not st.session_state.cover_letter:
         keywords = [kw.strip() for kw in keyword_response.content.split(',')]
         
         # Display extracted keywords
-        st.write("Extracted Keywords:", ", ".join(keywords))
+        with st.expander("View Extracted Keywords"):
+            st.write("Extracted Keywords:", ", ".join(keywords))
         
         # Use keywords to search vector database
         search_query = " ".join(keywords)
@@ -86,8 +87,10 @@ if not st.session_state.cover_letter:
 
         default_prompt = ("Write a cover letter for the given position. Write up to three paragraphs, "
                          "using simple, personable, and heartfelt language. Use the provided resume content "
-                         "to highlight relevant experience and skills.")
-        user_input = st.text_area("Enter your prompt:", value=default_prompt, height=80)
+                         "to highlight relevant experience and skills. \n\n I am interested in the position because...")
+        st.subheader("Customize your prompt")
+        st.write("Here you can add your motivations, values, long-term goals that overlap with the job description, or anything else you want to add to the cover letter.")
+        user_input = st.text_area("Enter your prompt:", value=default_prompt, height=120)
 
         if st.button("Generate") and user_input.strip():
             # Combine all context for the cover letter
