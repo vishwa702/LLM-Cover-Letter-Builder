@@ -85,6 +85,6 @@ if existing_files:
         os.remove(os.path.join(DATA_FOLDER, selected_file))
         collection.delete(ids=[selected_file])  # Remove from ChromaDB
         st.success(f"🗑 Deleted `{selected_file}`")
-        st.experimental_rerun()
+        st.rerun()
 else:
     st.info("🚫 No files uploaded yet.")
